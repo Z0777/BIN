@@ -1,0 +1,836 @@
+================================================================================
+BODEGAS & KITS BTI — INSTRUCCIONES FALTANTES (MENÚ, POPUPS Y VISTAS)
+Sintaxis: Español (; separador · ;; encadenado · coma decimal)
+================================================================================
+
+1. ¿EN QUÉ DOCUMENTOS ESTÁ LA INFORMACIÓN DE LOS POPUPS?
+--------------------------------------------------------------------------------
+La información de los popups está repartida en tus archivos de la siguiente forma:
+
+A) Archivo: "Bodegas_Kits_BTI_Guia_Construccion.md"
+   - PARTE 8 ("Los tres popups"): Aquí está el diseño completo y las fórmulas de:
+     * 8.1 cntPopCarrito + recScrimPop (con cmbEncargado y cmbRecibe como TEXTO
+       usando la lista CATALOGO_PERSONAL1).
+     * 8.2 cntPopArea + recScrimArea (selector de área con buscador).
+     * 8.3 cntPopKit + recScrimKit (selector de kit).
+   - PARTE 10 (scrDevolucion): Al inicio de esta parte viene la fórmula final de
+     "btnElegirArea.OnSelect" para que el mismo popup de área sirva tanto en
+     Asignar como en Devolución.
+
+B) Archivo: "Bodegas_Kits_BTI1_Guia_Construccion.md"
+   - PARTE 8 ("Los tres popups"): Contiene la versión previa de los 3 popups
+     (donde solo había un combo cmbRecoge). Úsala solo como referencia visual,
+     pero aplica las fórmulas de "Bodegas_Kits_BTI_Guia_Construccion.md".
+
+C) Archivo: "FIN-Bodegas_Kits_BTI_Pantalla_Unica (1).md"
+   - PARTE H.1: Corrige la propiedad DropShadow de los 3 popups a:
+     DropShadow.ExtraBold
+   - PARTE H.2: Define el orden de capas (del 4 al 9) en el árbol de vistas de
+     scrPrincipal para que los popups queden al frente sin usar ZIndex.
+   - PARTE I.2: Muestra el árbol completo de scrPrincipal donde los popups van
+     como hijos directos de la pantalla (hermanos de cntCuerpo y cntNav).
+
+D) Archivo: "PowerApps_Bodegas_Kits_BTI.md"
+   - Sección 7 ("cntPopup"): Es la primera versión del popup del carrito (cuando
+     aún tenía desplegable de área drpArea).
+
+
+================================================================================
+2. CORRECCIONES PENDIENTES EN TU GALERÍA DEL MENÚ LATERAL (galNav)
+================================================================================
+De acuerdo con el código YAML que compartiste de galNav, solo te falta ajustar
+estas propiedades para que el clic responda y los elementos no se encimen:
+
+2.1 Orden de capas dentro de galNav (Panel izquierdo -> Vista de árbol):
+    Haz clic derecho -> Reordenar sobre cada hijo de galNav para que queden así
+    (de arriba hacia abajo en el árbol de Power Apps):
+    1. btnNavItem  (AL FRENTE DE TODO - recibe el clic)
+    2. lblNavCta
+    3. lblNavItem
+    4. icoNavItem
+    5. recNavItem  (AL FONDO DE TODO - pinta el color de selección)
+
+2.2 Propiedades a corregir en galNav:
+    FillPortions     = 1
+    AlignInContainer = AlignInContainer.Stretch
+    Width            = Parent.Width - 16
+    TemplateSize     = 40
+    TemplatePadding  = 2
+
+2.3 Propiedades a corregir en btnNavItem (Botón clásico invisible):
+    /* CRÍTICO: Actualmente tienes Visible = varPantalla = "ASIG", cámbialo a: */
+    Visible            = true
+    X                  = 0
+    Y                  = 0
+    Height             = 38
+    PressedBorderColor = RGBA(0; 0; 0; 0)
+    RadiusTopLeft      = 8
+    RadiusTopRight     = 8
+    RadiusBottomLeft   = 8
+    RadiusBottomRight  = 8
+
+    /* En btnNavItem.OnSelect, agrega esta línea en la sección 6 (CAT) para que
+       el catálogo calcule las piezas afuera aunque no hayas entrado a SEG: */
+    If(
+        ThisItem.Pant = "CAT";
+        ClearCollect(colDetAb; nfDetAbierto)
+    );;
+
+    /* Y en la sección 3 (SEG) de btnNavItem.OnSelect, asegúrate de que GroupBy
+       tenga comillas simples en los nombres de columna: */
+    GroupBy(colDetAb; 'CodigoArea'; 'Lineas') As g;
+
+2.4 Propiedades a corregir en recNavItem (Rectángulo):
+    X           = 0
+    Y           = 0
+    Height      = 38
+    HoverFill   = Self.Fill
+    PressedFill = Self.Fill
+
+2.5 Propiedades a corregir en icoNavItem (Icono):
+    X      = 10
+    Y      = 11
+    Width  = 17
+    Height = 17
+    /* En tu propiedad Icon tienes "TREND" apuntando a Icon.Add. Cámbialo a: */
+    Icon = Switch(
+        ThisItem.Ico;
+        "HOME";  Icon.Home;
+        "ADD";   Icon.Add;
+        "TREND"; Icon.TrendingUp;
+        "BACK";  Icon.Reload;
+        "DOWN";  Icon.Download;
+        "ITEMS"; Icon.Items;
+        "TRASH"; Icon.Trash;
+        Icon.Hierarchy
+    )
+
+2.6 Propiedades a corregir en lblNavItem (Etiqueta):
+    X          = 34
+    Y          = 9
+    Width      = Parent.TemplateWidth - 76
+    Height     = 20
+    FontWeight = If(ThisItem.Pant = varPantalla; FontWeight.Semibold; FontWeight.Normal)
+
+2.7 Propiedades a corregir en lblNavCta (Etiqueta contador):
+    X     = Parent.TemplateWidth - 40
+    Y     = 11
+    Width = 30
+    Fill  = If(ThisItem.Pant = varPantalla; RGBA(0; 0; 0; 0,18); RGBA(255; 255; 255; 0,14))
+
+
+================================================================================
+3. VISTA DEL MENÚ PRINCIPAL (cntVMenu — Sección J.1)
+================================================================================
+Hijo de cntCuerpo (Contenedor de diseño VERTICAL).
+
+Propiedades de cntVMenu:
+    Visible              = varPantalla = "MENU"
+    FillPortions         = 1
+    AlignInContainer     = AlignInContainer.Stretch
+    LayoutDirection      = LayoutDirection.Vertical
+    LayoutGap            = 14
+    LayoutAlignItems     = LayoutAlignItems.Stretch
+    LayoutJustifyContent = LayoutJustifyContent.Start
+    LayoutOverflowY      = LayoutOverflow.Hide
+    PaddingTop           = 16
+    PaddingBottom        = 16
+    PaddingLeft          = nfPad
+    PaddingRight         = nfPad
+    Fill                 = RGBA(0; 0; 0; 0)
+
+--------------------------------------------------------------------------------
+3.1 galKpi — Galería en blanco HORIZONTAL (Hijo 1 de cntVMenu)
+--------------------------------------------------------------------------------
+    FillPortions     = 0
+    Height           = 108
+    AlignInContainer = AlignInContainer.Stretch
+    Layout           = Layout.Horizontal
+    TemplateSize     = If(Parent.Width < nfCorteMovil; 152; (Self.Width - 8) / 5)
+    TemplatePadding  = 4
+    ShowScrollbar    = true
+
+    Items =
+    Table(
+        {Val: nfCtaAbiertas;  Etq: "SALIDAS ABIERTAS";     Col: nfCol.Ink};
+        {Val: nfCtaAfuera;    Etq: "PIEZAS AFUERA";        Col: nfCol.Ink};
+        {Val: nfCtaDanadas;   Etq: "PIEZAS DAÑADAS";       Col: nfCol.Amber};
+        {Val: nfCtaPerdidas;  Etq: "PIEZAS EXTRAVIADAS";   Col: nfCol.Red};
+        {Val: nfCtaIngresos;  Etq: "INGRESOS POR APLICAR"; Col: nfCol.Blue}
+    )
+
+    Controles dentro de la plantilla de galKpi:
+    1) cntKpi (Contenedor de diseño VERTICAL):
+       X = 0 · Y = 0 · Width = Parent.TemplateWidth - 8 · Height = 100
+       LayoutDirection = LayoutDirection.Vertical · LayoutGap = 2
+       LayoutJustifyContent = LayoutJustifyContent.Center
+       PaddingLeft = 14 · PaddingRight = 14
+       Fill = ColorValue(nfCol.Surface)
+       BorderThickness = 1 · BorderColor = ColorValue(nfCol.Line)
+       RadiusTopLeft = nfRadio · RadiusTopRight = nfRadio
+       RadiusBottomLeft = nfRadio · RadiusBottomRight = nfRadio
+
+       1.1) lblKpiVal (Etiqueta dentro de cntKpi):
+            FillPortions = 0 · Height = 34
+            AlignInContainer = AlignInContainer.Stretch
+            Text = ThisItem.Val · Size = 22 · FontWeight = FontWeight.Bold
+            Color = ColorValue(ThisItem.Col)
+
+       1.2) lblKpiEtq (Etiqueta dentro de cntKpi):
+            FillPortions = 0 · Height = 30
+            AlignInContainer = AlignInContainer.Stretch
+            Text = ThisItem.Etq · Size = 9,5 · FontWeight = FontWeight.Semibold
+            Color = ColorValue(nfCol.Faint)
+
+--------------------------------------------------------------------------------
+3.2 galBotones — Galería en blanco VERTICAL (Hijo 2 de cntVMenu)
+--------------------------------------------------------------------------------
+    FillPortions     = 1
+    AlignInContainer = AlignInContainer.Stretch
+    Layout           = Layout.Vertical
+    WrapCount        = Max(1; RoundDown(Self.Width / 252; 0))
+    TemplateSize     = 142
+    TemplatePadding  = 5
+    Items            = nfBotonesMenu
+
+    Controles dentro de la plantilla de galBotones:
+    (Orden de capas del fondo al frente: cntBoton -> lblBtnCta -> btnTile)
+
+    1) cntBoton (Contenedor de diseño VERTICAL - al fondo):
+       X = 0 · Y = 0 · Width = Parent.TemplateWidth - 10 · Height = 134
+       LayoutDirection = LayoutDirection.Vertical · LayoutGap = 8
+       PaddingTop = 16 · PaddingBottom = 14 · PaddingLeft = 16 · PaddingRight = 16
+       Fill = ColorValue(nfCol.Surface)
+       BorderThickness = 1 · BorderColor = ColorValue(nfCol.Line)
+       RadiusTopLeft = nfRadio · RadiusTopRight = nfRadio
+       RadiusBottomLeft = nfRadio · RadiusBottomRight = nfRadio
+
+       1.1) cntIcoBtn (Contenedor MANUAL dentro de cntBoton):
+            FillPortions = 0 · Width = 38 · Height = 38
+            AlignInContainer = AlignInContainer.Start
+            Fill = ColorValue(nfCol.AccentSoft)
+            RadiusTopLeft = 9 · RadiusTopRight = 9 · RadiusBottomLeft = 9 · RadiusBottomRight = 9
+
+            1.1.a) icoBtn (Icono dentro de cntIcoBtn):
+                   X = 10 · Y = 10 · Width = 18 · Height = 18
+                   Color = ColorValue(nfCol.AccentInk)
+                   Icon = Switch(
+                       ThisItem.Ico;
+                       "ADD";   Icon.Add;
+                       "TREND"; Icon.TrendingUp;
+                       "BACK";  Icon.Reload;
+                       "DOWN";  Icon.Download;
+                       "ITEMS"; Icon.Items;
+                       Icon.Trash
+                   )
+
+       1.2) lblBtnTit (Etiqueta dentro de cntBoton):
+            FillPortions = 0 · Height = 22
+            AlignInContainer = AlignInContainer.Stretch
+            Text = ThisItem.Titulo · Size = 14,5 · FontWeight = FontWeight.Semibold
+            Color = ColorValue(nfCol.Ink)
+
+       1.3) lblBtnDet (Etiqueta dentro de cntBoton):
+            FillPortions = 1 · AlignInContainer = AlignInContainer.Stretch
+            Text = ThisItem.Detalle · Size = 11,5 · Color = ColorValue(nfCol.Muted)
+
+    2) lblBtnCta (Etiqueta suelta en la plantilla de galBotones, fuera de cntBoton):
+       X = Parent.TemplateWidth - 56 · Y = 16 · Width = 32 · Height = 20
+       Text = ThisItem.Cta · Visible = ThisItem.Cta > 0
+       Align = Align.Center · Size = 10,5
+       Color = ColorValue(nfCol.Accent)
+       BorderThickness = 1 · BorderColor = ColorValue(nfCol.Accent)
+       RadiusTopLeft = 5 · RadiusTopRight = 5 · RadiusBottomLeft = 5 · RadiusBottomRight = 5
+
+    3) btnTile (Botón clásico invisible - TRAER AL FRENTE en la plantilla):
+       X = 0 · Y = 0 · Width = Parent.TemplateWidth - 10 · Height = 134
+       Text = ""
+       Fill = RGBA(0; 0; 0; 0)
+       HoverFill = RGBA(21; 127; 91; 0,06)
+       PressedFill = RGBA(21; 127; 91; 0,12)
+       BorderColor = RGBA(0; 0; 0; 0) · HoverBorderColor = RGBA(0; 0; 0; 0)
+       OnSelect = (Pega aquí EXACTAMENTE la misma fórmula OnSelect de btnNavItem)
+
+
+================================================================================
+4. LOS TRES POPUPS (Hijos directos de scrPrincipal — Parte 8 + Parte H)
+================================================================================
+IMPORTANTE: Los 6 controles siguientes se insertan directamente en scrPrincipal
+(al mismo nivel que cntCuerpo y cntNav, NUNCA dentro de cntCuerpo).
+Orden de capas en scrPrincipal (del fondo al frente):
+1. cntCuerpo
+2. recScrimNav
+3. cntNav
+4. recScrimPop
+5. cntPopCarrito
+6. recScrimKit
+7. cntPopKit
+8. recScrimArea
+9. cntPopArea (el más al frente de toda la pantalla)
+
+--------------------------------------------------------------------------------
+4.1 POPUP 1: CARRITO DE ENTREGA (recScrimPop + cntPopCarrito)
+--------------------------------------------------------------------------------
+
+A) recScrimPop (Rectángulo — Hijo de scrPrincipal):
+   X        = 0
+   Y        = 0
+   Width    = Parent.Width
+   Height   = Parent.Height
+   Fill     = RGBA(10; 20; 15; 0,58)
+   Visible  = varPopup = "CARRITO"
+   OnSelect = Set(varPopup; "")
+
+B) cntPopCarrito (Contenedor MANUAL — Hijo de scrPrincipal):
+   Width             = Min(580; Parent.Width - 24)
+   Height            = Min(740; Parent.Height - 24)
+   X                 = (Parent.Width - Self.Width) / 2
+   Y                 = (Parent.Height - Self.Height) / 2
+   Fill              = ColorValue(nfCol.Surface)
+   BorderThickness   = 1
+   BorderColor       = ColorValue(nfCol.Line)
+   RadiusTopLeft     = 12
+   RadiusTopRight    = 12
+   RadiusBottomLeft  = 12
+   RadiusBottomRight = 12
+   DropShadow        = DropShadow.ExtraBold
+   Visible           = varPopup = "CARRITO"
+
+   Controles hijos dentro de cntPopCarrito:
+
+   1) lblPopTit (Etiqueta):
+      X = 16 · Y = 14 · Width = Parent.Width - 64 · Height = 24
+      Text = If(varModoCarga = "KIT"; "Confirmar " & varKit.NombreKit; "Confirmar entrega por unidad")
+      Size = 15 · FontWeight = FontWeight.Semibold · Color = ColorValue(nfCol.Ink)
+
+   2) icoPopX (Icono Cancel):
+      X = Parent.Width - 42 · Y = 14 · Width = 26 · Height = 26
+      Color = ColorValue(nfCol.Muted)
+      OnSelect = Set(varPopup; "")
+
+   3) galPopLineas (Galería en blanco VERTICAL):
+      Items         = colSel
+      X             = 0
+      Y             = 50
+      Width         = Parent.Width
+      Height        = Parent.Height - 50 - cntPopPie.Height
+      TemplateSize  = 78
+      ShowScrollbar = true
+
+      Controles dentro de la plantilla de galPopLineas:
+      3.1) cntPopLinea (Contenedor MANUAL):
+           X = 0 · Y = 0 · Width = Parent.TemplateWidth · Height = 76
+           Fill = ColorValue(nfCol.Surface)
+           BorderThickness = 1 · BorderColor = ColorValue(nfCol.Line2)
+
+      3.2) lblPLDesc (Etiqueta):
+           X = 16 · Y = 10 · Width = Parent.Width - 190 · Height = 20
+           Text = ThisItem.Codigo & "   " & ThisItem.Descripcion
+           Size = 13 · FontWeight = FontWeight.Semibold · Color = ColorValue(nfCol.Ink)
+
+      3.3) lblPLTags (Etiqueta):
+           X = 16 · Y = 32 · Width = Parent.Width - 190 · Height = 18
+           /* Nota: Si en tu colSel el campo se llama Tipos, usa ThisItem.Tipos */
+           Text = ThisItem.Tipos & "   ·   " & ThisItem.Bodega & "   ·   existencia " & ThisItem.Existencia & " " & ThisItem.Unidad
+           Size = 10 · Color = ColorValue(nfCol.Muted)
+
+      3.4) lblPLAviso (Etiqueta):
+           X = 16 · Y = 52 · Width = Parent.Width - 190 · Height = 18
+           Text = "Solo hay " & ThisItem.Existencia & " " & ThisItem.Unidad & " en " & ThisItem.Bodega
+           Visible = ThisItem.Cantidad > ThisItem.Existencia
+           Size = 10 · Color = ColorValue(nfCol.Red) · FontWeight = FontWeight.Semibold
+
+      3.5) cntPopCant (Contenedor MANUAL):
+           X = Parent.Width - 158 · Y = 24 · Width = 102 · Height = 28
+           Fill = ColorValue(nfCol.Surface2)
+           BorderThickness = 1 · BorderColor = ColorValue(nfCol.Line)
+           RadiusTopLeft = 7 · RadiusTopRight = 7 · RadiusBottomLeft = 7 · RadiusBottomRight = 7
+
+           Hijos dentro de cntPopCant:
+           - btnPopMenos (Botón clásico):
+             X = 0 · Y = 0 · Width = 28 · Height = 28 · Text = "−"
+             Fill = RGBA(0; 0; 0; 0) · BorderColor = RGBA(0; 0; 0; 0)
+             HoverFill = ColorValue(nfCol.AccentSoft) · Color = ColorValue(nfCol.Ink)
+             OnSelect = UpdateIf(colSel; Clave = ThisItem.Clave; {Cantidad: Max(1; ThisItem.Cantidad - 1)})
+
+           - lblPopCant (Etiqueta):
+             X = 28 · Y = 0 · Width = 46 · Height = 28
+             Text = ThisItem.Cantidad · Align = Align.Center · Size = 13 · FontWeight = FontWeight.Semibold
+
+           - btnPopMas (Botón clásico):
+             X = 74 · Y = 0 · Width = 28 · Height = 28 · Text = "+"
+             Fill = RGBA(0; 0; 0; 0) · BorderColor = RGBA(0; 0; 0; 0)
+             HoverFill = ColorValue(nfCol.AccentSoft) · Color = ColorValue(nfCol.Ink)
+             DisplayMode = If(ThisItem.Cantidad >= ThisItem.Existencia; DisplayMode.Disabled; DisplayMode.Edit)
+             OnSelect = UpdateIf(colSel; Clave = ThisItem.Clave; {Cantidad: Min(ThisItem.Existencia; ThisItem.Cantidad + 1)})
+
+      3.6) icoPopQuitar (Icono Cancel):
+           X = Parent.Width - 44 · Y = 26 · Width = 22 · Height = 22
+           Color = ColorValue(nfCol.Faint)
+           OnSelect = RemoveIf(colSel; Clave = ThisItem.Clave)
+
+   4) cntPopPie (Contenedor MANUAL — dentro de cntPopCarrito):
+      X               = 0
+      Height          = 344
+      Y               = Parent.Height - Self.Height
+      Width           = Parent.Width
+      Fill            = ColorValue(nfCol.Surface2)
+      BorderThickness = 1
+      BorderColor     = ColorValue(nfCol.Line2)
+
+      Controles hijos dentro de cntPopPie:
+      (Para el selector de área, ordena del fondo al frente: un rectángulo de
+       fondo o el botón al fondo -> etiquetas -> botón invisible al frente)
+
+      4.1) lblPopTotal (Etiqueta):
+           X = 16 · Y = 10 · Width = Parent.Width - 32 · Height = 22
+           Text = Sum(colSel; Cantidad) & " pieza(s) en " & CountRows(colSel) & " renglón(es)"
+           Size = 13 · FontWeight = FontWeight.Semibold · Color = ColorValue(nfCol.Ink)
+
+      4.2) Selector de Área en cntPopPie:
+           - recFondoAreaPop (Rectángulo de fondo - al fondo):
+             X = 16 · Y = 42 · Width = Parent.Width - 32 · Height = 44
+             Fill = ColorValue(nfCol.Surface)
+             BorderThickness = 1
+             BorderColor = If(IsBlank(varArea); ColorValue(nfCol.Red); ColorValue(nfCol.Line))
+
+           - lblAreaEtq (Etiqueta):
+             X = 28 · Y = 48 · Width = Parent.Width - 82 · Height = 14
+             Text = "ÁREA / INVERNADERO"
+             Size = 9 · Color = ColorValue(nfCol.Faint) · FontWeight = FontWeight.Semibold
+
+           - lblAreaElegida (Etiqueta):
+             X = 28 · Y = 62 · Width = Parent.Width - 82 · Height = 20
+             Text = If(IsBlank(varArea); "Toque para seleccionar"; varArea.Title & " · " & varArea.NombreArea)
+             Size = 13 · FontWeight = FontWeight.Semibold
+             Color = If(IsBlank(varArea); ColorValue(nfCol.Faint); ColorValue(nfCol.Ink))
+
+           - icoAreaFlecha (Icono ChevronRight):
+             X = Parent.Width - 48 · Y = 54 · Width = 20 · Height = 20
+             Color = ColorValue(nfCol.Faint)
+
+           - btnAbrirArea (Botón clásico invisible - TRAER AL FRENTE sobre los 4 anteriores):
+             X = 16 · Y = 42 · Width = Parent.Width - 32 · Height = 44
+             Text = "" · Fill = RGBA(0; 0; 0; 0)
+             HoverFill = RGBA(21; 127; 91; 0,06)
+             BorderThickness = 1
+             BorderColor = If(IsBlank(varArea); ColorValue(nfCol.Red); ColorValue(nfCol.Line))
+             RadiusTopLeft = 8 · RadiusTopRight = 8 · RadiusBottomLeft = 8 · RadiusBottomRight = 8
+             OnSelect = Set(varPopup; "AREA")
+
+      4.3) cmbEncargado (Combo box moderno):
+           X                    = 16
+           Y                    = 96
+           Width                = (Parent.Width - 44) / 2
+           Height               = 44
+           Items                = nfEncargados
+           ItemDisplayText      = ThisItem.Nombre & "  ·  " & ThisItem.CODIGO
+           DefaultSelectedItems = Filter(nfEncargados; Nombre = Coalesce(varEncargado.Nombre; varArea.EncargadoArea))
+           InputTextPlaceholder = "Encargado del área"
+           SelectMultiple       = false
+           IsSearchable         = true
+           Required             = true
+           ValidationState      = If(IsBlank(varEncargado); ValidationState.Error; ValidationState.None)
+           Appearance           = Appearance.Outline
+           Fill                 = ColorValue(nfCol.Surface)
+           BorderColor          = ColorValue(nfCol.Line)
+           BorderThickness      = 1
+           Color                = ColorValue(nfCol.Ink)
+           Size                 = 13
+           RadiusTopLeft        = 8 · RadiusTopRight = 8 · RadiusBottomLeft = 8 · RadiusBottomRight = 8
+           OnChange             = Set(varEncargado; Self.Selected)
+
+      4.4) cmbRecibe (Combo box moderno):
+           X                    = cmbEncargado.X + cmbEncargado.Width + 12
+           Y                    = 96
+           Width                = cmbEncargado.Width
+           Height               = 44
+           Items                = nfRecibe
+           ItemDisplayText      = ThisItem.Nombre & "  ·  " & ThisItem.DEPARTAMENTO
+           DefaultSelectedItems = Filter(nfRecibe; Nombre = varRecibe.Nombre)
+           InputTextPlaceholder = "¿Quién lo llega a traer?"
+           SelectMultiple       = false
+           IsSearchable         = true
+           Required             = true
+           ValidationState      = If(IsBlank(varRecibe); ValidationState.Error; ValidationState.None)
+           Appearance           = Appearance.Outline
+           Fill                 = ColorValue(nfCol.Surface)
+           BorderColor          = ColorValue(nfCol.Line)
+           BorderThickness      = 1
+           Color                = ColorValue(nfCol.Ink)
+           Size                 = 13
+           RadiusTopLeft        = 8 · RadiusTopRight = 8 · RadiusBottomLeft = 8 · RadiusBottomRight = 8
+           OnChange             = Set(varRecibe; Self.Selected)
+
+      4.5) lblAutoFecha (Etiqueta):
+           X = 16 · Y = 150 · Width = Parent.Width - 32 · Height = 18
+           Text = "Fecha de entrega:  " & Text(Now(); "dd/mm/yyyy hh:mm") & "   ·   automática"
+           Size = 11 · Color = ColorValue(nfCol.Muted)
+
+      4.6) lblAutoResp (Etiqueta):
+           X = 16 · Y = 170 · Width = Parent.Width - 32 · Height = 18
+           Text = "Responsable (User):  " & nfUser.Nombre
+           Size = 11 · Color = ColorValue(nfCol.Muted)
+
+      4.7) lblAutoArea (Etiqueta):
+           X = 16 · Y = 190 · Width = Parent.Width - 32 · Height = 18
+           Text = "Área:  " & Coalesce(varArea.Title; "—") & "   ·   " & Coalesce(varArea.Cultivo.Value; "—") & "   ·   Kit sugerido " & Coalesce(varArea.KitAsignado; "—")
+           Size = 11 · Color = ColorValue(nfCol.Muted)
+
+      4.8) txtObs (Text input moderno):
+           X             = 16
+           Y             = 214
+           Width         = Parent.Width - 32
+           Height        = 58
+           Default       = ""
+           Placeholder   = "Observación de la entrega (opcional)"
+           Type          = TextInputType.Multiline
+           MaxLength     = 500
+           Appearance    = Appearance.Outline
+           Fill          = ColorValue(nfCol.Surface)
+           BorderColor   = ColorValue(nfCol.Line)
+           Size          = 12,5
+           RadiusTopLeft = 8 · RadiusTopRight = 8 · RadiusBottomLeft = 8 · RadiusBottomRight = 8
+
+      4.9) btnPopMas (Botón clásico):
+           X               = 16
+           Y               = 282
+           Width           = (Parent.Width - 44) / 2
+           Height          = 44
+           Text            = "Agregar más artículos"
+           Fill            = ColorValue(nfCol.Surface)
+           Color           = ColorValue(nfCol.Ink)
+           BorderThickness = 1
+           BorderColor     = ColorValue(nfCol.Line)
+           RadiusTopLeft   = 8 · RadiusTopRight = 8 · RadiusBottomLeft = 8 · RadiusBottomRight = 8
+           OnSelect        = Set(varPopup; "")
+
+      4.10) btnPopGuardar (Botón clásico):
+            X             = btnPopMas.X + btnPopMas.Width + 12
+            Y             = 282
+            Width         = btnPopMas.Width
+            Height        = 44
+            Text          = "Guardar entrega"
+            Fill          = ColorValue(nfCol.Accent)
+            Color         = White
+            RadiusTopLeft = 8 · RadiusTopRight = 8 · RadiusBottomLeft = 8 · RadiusBottomRight = 8
+
+            DisplayMode =
+            If(
+                Or(
+                    varGuardando;
+                    IsEmpty(colSel);
+                    IsBlank(varArea);
+                    IsBlank(varEncargado);
+                    IsBlank(varRecibe);
+                    CountRows(Filter(colSel; Cantidad > Existencia)) > 0
+                );
+                DisplayMode.Disabled;
+                DisplayMode.Edit
+            )
+
+            OnSelect =
+            Set(varGuardando; true);;
+            Set(
+                varSalida;
+                Patch(
+                    BG_Salidas;
+                    Defaults(BG_Salidas);
+                    {
+                        FechaEntrega:    Now();
+                        TipoCarga:       {Value: varModoCarga};
+                        CodigoKit:       If(varModoCarga = "KIT"; varKit.Title; "");
+                        CodigoArea:      varArea.Title;
+                        Responsable:     nfPersonaUser;
+                        Encargado:       varEncargado.Nombre;
+                        EncargadoCodigo: varEncargado.CODIGO;
+                        Recibe:          varRecibe.Nombre;
+                        RecibeCodigo:    varRecibe.CODIGO;
+                        Observacion:     txtObs.Text;
+                        EstadoSalida:    {Value: "ABIERTA"}
+                    }
+                )
+            );;
+            Set(varNoSalida; "SAL-" & Text(varSalida.ID; "0000"));;
+            Patch(BG_Salidas; varSalida; {Title: varNoSalida; NoSalida: varNoSalida});;
+            ForAll(
+                colSel As s;
+                Patch(
+                    BG_SalidaDetalle;
+                    Defaults(BG_SalidaDetalle);
+                    {
+                        Title:           varNoSalida;
+                        NoSalida:        varNoSalida;
+                        CodigoArea:      varArea.Title;
+                        Clave:           s.Clave;
+                        Codigo:          s.Codigo;
+                        Descripcion:     s.Descripcion;
+                        /* Si en tu lista BG_SalidaDetalle y en colSel se llama Tipos, usa s.Tipos */
+                        Tipo:            {Value: s.Tipos};
+                        Categoria:       {Value: s.Categoria};
+                        Bodega:          {Value: s.Bodega};
+                        Unidad:          s.Unidad;
+                        CantEntregada:   s.Cantidad;
+                        CantBuena:       0;
+                        CantDanada:      0;
+                        CantExtraviada:  0;
+                        Estatus:         {Value: "ASIGNADO"};
+                        ComentarioLinea: "";
+                        Abierta:         true
+                    }
+                )
+            );;
+            ForAll(
+                colSel As s;
+                With(
+                    {a: LookUp(BG_Catalogo; Clave = s.Clave)};
+                    Patch(BG_Catalogo; a; {Existencia: a.Existencia - s.Cantidad})
+                )
+            );;
+            Set(varAreaVista; varArea);;
+            ClearCollect(
+                colSalArea;
+                Sort(Filter(BG_Salidas; CodigoArea = varArea.Title); FechaEntrega; SortOrder.Descending)
+            );;
+            Set(varSalVista; LookUp(BG_Salidas; NoSalida = varNoSalida));;
+            ClearCollect(colDetSal; Filter(BG_SalidaDetalle; NoSalida = varNoSalida));;
+            Clear(colSel);;
+            Reset(txtObs);;
+            Set(varArea; Blank());;
+            Set(varEncargado; Blank());;
+            Set(varRecibe; Blank());;
+            Set(varPopup; "");;
+            Set(varGuardando; false);;
+            Notify(varNoSalida & " guardada · " & varAreaVista.Title; NotificationType.Success; 3000);;
+            Set(varPantalla; "SEGDET")
+
+
+--------------------------------------------------------------------------------
+4.2 POPUP 2: SELECTOR DE KIT (recScrimKit + cntPopKit)
+--------------------------------------------------------------------------------
+
+A) recScrimKit (Rectángulo — Hijo de scrPrincipal):
+   X        = 0
+   Y        = 0
+   Width    = Parent.Width
+   Height   = Parent.Height
+   Fill     = RGBA(10; 20; 15; 0,45)
+   Visible  = varPopup = "KIT"
+   OnSelect = Set(varPopup; "")
+
+B) cntPopKit (Contenedor MANUAL — Hijo de scrPrincipal):
+   Width             = Min(520; Parent.Width - 24)
+   Height            = Min(480; Parent.Height - 40)
+   X                 = (Parent.Width - Self.Width) / 2
+   Y                 = (Parent.Height - Self.Height) / 2
+   Fill              = ColorValue(nfCol.Surface)
+   BorderThickness   = 1
+   BorderColor       = ColorValue(nfCol.Line)
+   RadiusTopLeft     = 12 · RadiusTopRight = 12 · RadiusBottomLeft = 12 · RadiusBottomRight = 12
+   DropShadow        = DropShadow.ExtraBold
+   Visible           = varPopup = "KIT"
+
+   Controles hijos dentro de cntPopKit:
+
+   1) lblKitTit (Etiqueta):
+      X = 16 · Y = 14 · Width = Parent.Width - 64 · Height = 24
+      Text = "Seleccione el kit de ciclo"
+      Size = 15 · FontWeight = FontWeight.Semibold · Color = ColorValue(nfCol.Ink)
+
+   2) icoKitX (Icono Cancel):
+      X = Parent.Width - 42 · Y = 14 · Width = 26 · Height = 26
+      Color = ColorValue(nfCol.Muted)
+      OnSelect = Set(varPopup; "")
+
+   3) galKitPop (Galería en blanco VERTICAL):
+      Items         = nfKits
+      X             = 8
+      Y             = 50
+      Width         = Parent.Width - 16
+      Height        = Parent.Height - 62
+      TemplateSize  = 86
+      ShowScrollbar = true
+
+      Controles dentro de la plantilla de galKitPop:
+      (Orden de capas del fondo al frente: cntKitFila -> etiquetas -> btnElegirKitPop)
+
+      3.1) cntKitFila (Contenedor MANUAL - al fondo):
+           X = 0 · Y = 0 · Width = Parent.TemplateWidth - 4 · Height = 80
+           Fill = If(ThisItem.Title = varKit.Title; ColorValue(nfCol.AccentSoft); ColorValue(nfCol.Surface))
+           BorderThickness = 1
+           BorderColor = If(ThisItem.Title = varKit.Title; ColorValue(nfCol.Accent); ColorValue(nfCol.Line2))
+           RadiusTopLeft = 8 · RadiusTopRight = 8 · RadiusBottomLeft = 8 · RadiusBottomRight = 8
+
+      3.2) lblKitPopNom (Etiqueta):
+           X = 14 · Y = 14 · Width = Parent.TemplateWidth - 50 · Height = 22
+           Text = ThisItem.Title & "  ·  " & ThisItem.NombreKit
+           Size = 14 · FontWeight = FontWeight.Semibold · Color = ColorValue(nfCol.Ink)
+
+      3.3) lblKitPopDet (Etiqueta):
+           X = 14 · Y = 42 · Width = Parent.TemplateWidth - 50 · Height = 20
+           Text = ThisItem.Cultivo.Value & "   ·   " & CountRows(Filter(BG_KitDetalle; Title = ThisItem.Title)) & " renglones"
+           Size = 11,5 · Color = ColorValue(nfCol.Muted)
+
+      3.4) btnElegirKitPop (Botón clásico invisible - TRAER AL FRENTE):
+           X = 0 · Y = 0 · Width = Parent.TemplateWidth - 4 · Height = 80
+           Text = "" · Fill = RGBA(0; 0; 0; 0)
+           HoverFill = RGBA(21; 127; 91; 0,06)
+           PressedFill = RGBA(21; 127; 91; 0,12)
+           BorderColor = RGBA(0; 0; 0; 0)
+
+           OnSelect =
+           Set(varKit; ThisItem);;
+           Set(varPopup; "");;
+           Clear(colCatSel);;
+           ClearCollect(
+               colSel;
+               ForAll(
+                   Filter(BG_KitDetalle; Title = ThisItem.Title) As d;
+                   With(
+                       {a: LookUp(nfCatalogo; Clave = d.Clave)};
+                       Patch(
+                           nfLineaVacia;
+                           {
+                               Clave:       a.Clave;
+                               Codigo:      a.Codigo;
+                               Descripcion: a.Descripcion;
+                               Tipos:       a.Tipos.Value;
+                               Categoria:   a.Categoria.Value;
+                               Bodega:      a.Bodega.Value;
+                               Unidad:      a.Unidad;
+                               Existencia:  a.Existencia;
+                               Estandar:    d.CantidadEstandar;
+                               Cantidad:    Min(d.CantidadEstandar; a.Existencia)
+                           }
+                       )
+                   )
+               )
+           );;
+           RemoveIf(colSel; Existencia <= 0)
+
+
+--------------------------------------------------------------------------------
+4.3 POPUP 3: SELECTOR DE ÁREA (recScrimArea + cntPopArea)
+--------------------------------------------------------------------------------
+(Este popup se abre encima del carrito cuando varPantalla = "ASIG", o encima de
+la vista de devolución cuando varPantalla = "DEV").
+
+A) recScrimArea (Rectángulo — Hijo de scrPrincipal):
+   X        = 0
+   Y        = 0
+   Width    = Parent.Width
+   Height   = Parent.Height
+   Fill     = RGBA(10; 20; 15; 0,45)
+   Visible  = varPopup = "AREA"
+   OnSelect = Set(varPopup; If(varPantalla = "DEV"; ""; "CARRITO"))
+
+B) cntPopArea (Contenedor MANUAL — Hijo de scrPrincipal, AL FRENTE DE TODO):
+   Width             = Min(460; Parent.Width - 24)
+   Height            = Min(560; Parent.Height - 40)
+   X                 = (Parent.Width - Self.Width) / 2
+   Y                 = (Parent.Height - Self.Height) / 2
+   Fill              = ColorValue(nfCol.Surface)
+   BorderThickness   = 1
+   BorderColor       = ColorValue(nfCol.Line)
+   RadiusTopLeft     = 12 · RadiusTopRight = 12 · RadiusBottomLeft = 12 · RadiusBottomRight = 12
+   DropShadow        = DropShadow.ExtraBold
+   Visible           = varPopup = "AREA"
+
+   Controles hijos dentro de cntPopArea:
+
+   1) lblAreaTit (Etiqueta):
+      X = 16 · Y = 14 · Width = Parent.Width - 64 · Height = 24
+      Text = "Seleccione el área o invernadero"
+      Size = 15 · FontWeight = FontWeight.Semibold · Color = ColorValue(nfCol.Ink)
+
+   2) icoAreaX (Icono Cancel):
+      X = Parent.Width - 42 · Y = 14 · Width = 26 · Height = 26
+      Color = ColorValue(nfCol.Muted)
+      OnSelect = Set(varPopup; If(varPantalla = "DEV"; ""; "CARRITO"))
+
+   3) txtBuscarArea (Text input moderno):
+      X             = 16
+      Y             = 48
+      Width         = Parent.Width - 32
+      Height        = 38
+      Default       = ""
+      Placeholder   = "Buscar INV-01, Invernadero 3, tomate…"
+      Type          = TextInputType.Search
+      TriggerOutput = TriggerOutput.Delayed
+      Appearance    = Appearance.Outline
+      Fill          = ColorValue(nfCol.Surface2)
+      BorderColor   = ColorValue(nfCol.Line)
+      Size          = 13
+      RadiusTopLeft = 8 · RadiusTopRight = 8 · RadiusBottomLeft = 8 · RadiusBottomRight = 8
+
+   4) galAreaPop (Galería en blanco VERTICAL):
+      Items =
+      Filter(
+          nfAreas;
+          Or(
+              IsBlank(txtBuscarArea.Text);
+              StartsWith(Title; txtBuscarArea.Text);
+              StartsWith(NombreArea; txtBuscarArea.Text)
+          )
+      )
+      X             = 8
+      Y             = 96
+      Width         = Parent.Width - 16
+      Height        = Parent.Height - 108
+      TemplateSize  = 70
+      ShowScrollbar = true
+
+      Controles dentro de la plantilla de galAreaPop:
+      (Orden de capas del fondo al frente: cntAreaFila -> etiquetas/icono -> btnElegirArea)
+
+      4.1) cntAreaFila (Contenedor MANUAL - al fondo):
+           X = 0 · Y = 0 · Width = Parent.TemplateWidth - 4 · Height = 66
+           Fill = If(
+               ThisItem.Title = If(varPantalla = "DEV"; varAreaDev.Title; varArea.Title);
+               ColorValue(nfCol.AccentSoft);
+               ColorValue(nfCol.Surface)
+           )
+           BorderThickness = 1
+           BorderColor = If(
+               ThisItem.Title = If(varPantalla = "DEV"; varAreaDev.Title; varArea.Title);
+               ColorValue(nfCol.Accent);
+               ColorValue(nfCol.Line2)
+           )
+           RadiusTopLeft = 8 · RadiusTopRight = 8 · RadiusBottomLeft = 8 · RadiusBottomRight = 8
+
+      4.2) lblAreaFilaCod (Etiqueta):
+           X = 14 · Y = 9 · Width = 90 · Height = 16
+           Text = ThisItem.Title
+           Size = 10,5 · Color = ColorValue(nfCol.Accent)
+
+      4.3) lblAreaFilaNom (Etiqueta):
+           X = 14 · Y = 25 · Width = Parent.TemplateWidth - 60 · Height = 20
+           Text = ThisItem.NombreArea & "   ·   " & ThisItem.Cultivo.Value
+           Size = 13,5 · FontWeight = FontWeight.Semibold · Color = ColorValue(nfCol.Ink)
+
+      4.4) lblAreaFilaGente (Etiqueta):
+           X = 14 · Y = 45 · Width = Parent.TemplateWidth - 60 · Height = 16
+           Text = "Enc. " & ThisItem.EncargadoArea
+           Size = 10,5 · Color = ColorValue(nfCol.Faint)
+
+      4.5) icoAreaCheck (Icono CheckBadge):
+           X = Parent.TemplateWidth - 40 · Y = 22 · Width = 22 · Height = 22
+           Color = ColorValue(nfCol.Accent)
+           Visible = ThisItem.Title = If(varPantalla = "DEV"; varAreaDev.Title; varArea.Title)
+
+      4.6) btnElegirArea (Botón clásico invisible - TRAER AL FRENTE):
+           X = 0 · Y = 0 · Width = Parent.TemplateWidth - 4 · Height = 66
+           Text = "" · Fill = RGBA(0; 0; 0; 0)
+           HoverFill = RGBA(21; 127; 91; 0,06)
+           PressedFill = RGBA(21; 127; 91; 0,12)
+           BorderColor = RGBA(0; 0; 0; 0)
+
+           OnSelect =
+           If(
+               varPantalla = "DEV";
+               Set(varAreaDev; ThisItem);
+               Set(varArea; ThisItem)
+           );;
+           Set(varEncargado; LookUp(nfEncargados; Nombre = ThisItem.EncargadoArea));;
+           Reset(txtBuscarArea);;
+           Set(varPopup; If(varPantalla = "DEV"; ""; "CARRITO"))
