@@ -1,0 +1,611 @@
+================================================================================
+DIAGNÓSTICO, CORRECCIONES DE LÓGICA FALTANTE Y MEJORAS — BODEGAS (scrPrincipal)
+================================================================================
+
+NOTA SOBRE SEPARADORES: 
+En tu YAML pegado las fórmulas aparecen con comas (,) y punto y coma (;). 
+En las instrucciones de abajo te incluyo la sintaxis estándar de Power Apps en 
+español (; para separar parámetros y ;; para encadenar acciones) para que la 
+pegues directamente en la barra de fórmulas de Power Apps Studio.
+
+--------------------------------------------------------------------------------
+1. ¿POR QUÉ EL MENÚ LATERAL (cntNav) SE VE BLANCO Y CÓMO CORREGIRLO?
+--------------------------------------------------------------------------------
+Diagnóstico en tu YAML:
+En el control `cntNav`, omitiste la propiedad `Fill` (color de relleno). Al no 
+tener `Fill`, el contenedor es transparente y deja ver el fondo blanco de 
+`scrPrincipal`. Como los textos (`lblNavItem`) e iconos (`icoNavItem`) son de 
+color blanco (`Color.White`), blanco sobre blanco hace que no se visualice nada.
+
+Solución — Selecciona `cntNav` en el árbol y configura estas propiedades:
+  • Fill:            ColorValue(nfCol.NavBg)   
+                     (O si no tienes nfCol.NavBg en App.Formulas, usa: RGBA(14; 36; 27; 1))
+  • X:               0
+  • Y:               0
+  • Visible:         Or(Parent.Width >= nfCorteMovil; varNavAbierto)
+
+--------------------------------------------------------------------------------
+2. CORRECCIONES CRÍTICAS EN CONTROLES EXISTENTES (ERRORES DETECTADOS EN YAML)
+--------------------------------------------------------------------------------
+Al revisar tu código YAML línea por línea, detecté estos errores que impedirán 
+que la app funcione bien si no los corriges:
+
+A) `cntPopCarrito` (Siempre está visible tapando la pantalla):
+   • En tu YAML tiene: `Visible: =true//varPopup = "CARRITO"`
+   • cámbialo a:       `varPopup = "CARRITO"`
+
+B) `cntPopKit` (Tiene pegada por error la lógica del Popup de Área):
+   • En `lblKitTit` › Text: Tienes `"Seleccione el área o invernadero"`. 
+     Cámbialo a: `"Seleccione el kit de ciclo"`
+   • En `icoKitX` › OnSelect: Tienes `Set(varPopup; "CARRITO")`. 
+     Cámbialo a: `Set(varPopup; "")`
+   • En `lblKitPopDet` › Y: Tienes `14` (se enciman los dos textos). 
+     Cámbialo a: `42`
+   • En `btnElegirKit1` (dentro de `cntKitFila`) › OnSelect: Tienes `Set(varArea...)`. 
+     Cámbialo por la lógica real para cargar el Kit:
+     Set(varKit; ThisItem);;
+     ClearCollect(
+         colSel;
+         ForAll(
+             Filter(BG_KitDetalle; Title = ThisItem.Title) As d;
+             With(
+                 {a: LookUp(nfCatalogo; Clave = d.Clave)};
+                 Patch(
+                     nfLineaVacia;
+                     {
+                         Clave: a.Clave; Codigo: a.Codigo; Descripcion: a.Descripcion;
+                         Tipo: a.Tipos.Value; Categoria: a.Categoria.Value; Bodega: a.Bodega.Value;
+                         Unidad: a.Unidad; Existencia: a.Existencia;
+                         Estandar: d.CantidadEstandar;
+                         Cantidad: Min(d.CantidadEstandar; a.Existencia)
+                     }
+                 )
+             )
+         )
+     );;
+     RemoveIf(colSel; Existencia <= 0);;
+     Set(varPopup; "")
+
+C) `galAreaPop` (En `cntPopArea` el buscador está comentado y no abre en Devolución):
+   • En `galAreaPop` › Items: Descomenta el filtro:
+     Filter(nfAreas; Or(IsBlank(txtBuscarArea.Text); StartsWith(Title; txtBuscarArea.Text); StartsWith(NombreArea; txtBuscarArea.Text)))
+   • En `icoAreaCheck` › Icon: Falta el icono. Pon: `Icon.Check`
+   • En `btnElegirArea` › OnSelect: Ajusta para que sirva tanto en Carrito como en Devoluciones:
+     If(
+         varPantalla = "DEV";
+         Set(varAreaDev; ThisItem);;
+         ClearCollect(colSalArea; Sort(Filter(BG_Salidas; CodigoArea = ThisItem.Title; EstadoSalida.Value = "ABIERTA"); FechaEntrega; SortOrder.Descending));;
+         Set(varSalVista; First(colSalArea));;
+         Set(varPopup; "");
+         Set(varArea; ThisItem);;
+         Set(varEncargado; LookUp(nfEncargados; Nombre = ThisItem.EncargadoArea.DisplayName));;
+         Set(varPopup; "CARRITO")
+     );;
+     Reset(txtBuscarArea)
+
+D) Inconsistencia de nombres (`varRecoge` vs `varRecibe` y `Tipo` vs `Tipos`):
+   • En `cmbRecoge` › OnChange: Tienes `Set(varRecoge; Self.Selected)`, pero en 
+     `btnPopGuardar` guardas `varRecibe.Nombre`. Unifica en `cmbRecoge` › OnChange:
+     Set(varRecoge; Self.Selected);; Set(varRecibe; Self.Selected)
+   • En `cmbEncargado` › ValidationState: Tienes `If(IsBlank(varRecoge)...)`. 
+     Cámbialo a: `If(IsBlank(varEncargado); ValidationState.Error; ValidationState.None)`
+   • En `btnPopGuardar` › OnSelect (dentro del primer ForAll): Tienes `Tipos: {Value: s.Tipos}`, 
+     pero en tu colección `colSel` el campo se llama `Tipo`. Cámbialo a:
+     Tipos: {Value: Coalesce(s.Tipo; s.Tipos)}
+
+E) `recIngChip_1` (En `galIngBodega` dentro de Ingresos):
+   • Tienes el condicional comparando contra `Tipo` en vez de `BodegaDestino`.
+   • En `recIngChip_1` › Fill:
+     If(ThisItem.Valor = LookUp(colPorIngresar; IdGeneral = ThisItem.Fila; BodegaDestino); ColorValue(nfCol.AccentSoft); ColorValue(nfCol.Surface2))
+   • En `recIngChip_1` › BorderColor:
+     If(ThisItem.Valor = LookUp(colPorIngresar; IdGeneral = ThisItem.Fila; BodegaDestino); ColorValue(nfCol.Accent); ColorValue(nfCol.Line))
+
+--------------------------------------------------------------------------------
+3. LÓGICA FALTANTE EN CONTROLES (OnSelect / OnChange QUE ESTÁN VACÍOS EN TU YAML)
+--------------------------------------------------------------------------------
+A estos controles les falta su programación en el YAML que enviaste. Selecciónalos 
+y pega la fórmula indicada:
+
+1) En Vista Asignar (`cntVAsignar`):
+   • `galItems` › Items: 
+     Actualmente solo filtra por unidad. Cámbialo para que respete el modo KIT y el multiselect de categorías (`colCatSel`):
+     If(
+         varModoCarga = "KIT";
+         ForAll(
+             Filter(BG_KitDetalle; Title = varKit.Title) As d;
+             With({a: LookUp(nfCatalogo; Clave = d.Clave)}; a)
+         );
+         Filter(
+             nfCatalogo;
+             Tipos.Value = varTipo;
+             Or(varBodegaFiltro = "TODAS"; IsBlank(varBodegaFiltro); Bodega.Value = varBodegaFiltro);
+             Or(IsEmpty(colCatSel); Categoria.Value in colCatSel.Cat);
+             Or(IsBlank(varBuscar); StartsWith(Codigo; varBuscar); StartsWith(Descripcion; varBuscar))
+         )
+     )
+
+   • `btnSelItem` (dentro de `galItems`) › OnSelect: (Falta completo)
+     If(
+         !IsBlank(LookUp(colSel; Clave = ThisItem.Clave));
+         RemoveIf(colSel; Clave = ThisItem.Clave);
+         Collect(
+             colSel;
+             Patch(
+                 nfLineaVacia;
+                 {
+                     Clave: ThisItem.Clave;
+                     Codigo: ThisItem.Codigo;
+                     Descripcion: ThisItem.Descripcion;
+                     Tipo: ThisItem.Tipos.Value;
+                     Categoria: ThisItem.Categoria.Value;
+                     Bodega: ThisItem.Bodega.Value;
+                     Unidad: ThisItem.Unidad;
+                     Existencia: ThisItem.Existencia;
+                     Estandar: 1;
+                     Cantidad: 1
+                 }
+             )
+         )
+     )
+
+   • `btnContinuar` (dentro de `cntAccion`) › OnSelect: (Falta completo)
+     Set(varPopup; "CARRITO")
+
+2) En Vista Detalle de Seguimiento (`cntVSegDetalle`):
+   • `btnTodoEntregado` › OnSelect:
+     ForAll(
+         Filter(colDetSal; Estatus.Value = "ASIGNADO") As r;
+         Patch(BG_SalidaDetalle; LookUp(BG_SalidaDetalle; ID = r.ID); {Estatus: {Value: "ENTREGADO"}})
+     );;
+     ClearCollect(colDetSal; Filter(BG_SalidaDetalle; NoSalida = varSalVista.NoSalida))
+
+   • `btnCerrarTodo` › OnSelect:
+     ForAll(
+         Filter(colDetSal; Abierta = true) As r;
+         With(
+             {
+                 pend: r.CantEntregada - r.CantBuena - r.CantDanada - r.CantExtraviada;
+                 esRet: r.Tipos.Value = "RETORNABLE"
+             };
+             Patch(
+                 BG_SalidaDetalle;
+                 LookUp(BG_SalidaDetalle; ID = r.ID);
+                 {
+                     CantBuena: If(esRet; r.CantBuena + pend; r.CantBuena);
+                     Estatus: {Value: If(esRet; "DEVUELTO"; "CONSUMIDO")};
+                     Abierta: false
+                 }
+             );;
+             If(
+                 esRet && pend > 0;
+                 With(
+                     {cat: LookUp(BG_Catalogo; Clave = r.Clave)};
+                     Patch(BG_Catalogo; cat; {Existencia: cat.Existencia + pend})
+                 )
+             )
+         )
+     );;
+     Patch(BG_Salidas; LookUp(BG_Salidas; NoSalida = varSalVista.NoSalida); {EstadoSalida: {Value: "CERRADA"}});;
+     ClearCollect(colDetSal; Filter(BG_SalidaDetalle; NoSalida = varSalVista.NoSalida))
+
+   • `btnRenEntregar` › OnSelect:
+     Patch(BG_SalidaDetalle; ThisItem; {Estatus: {Value: "ENTREGADO"}});;
+     ClearCollect(colDetSal; Filter(BG_SalidaDetalle; NoSalida = varSalVista.NoSalida))
+
+   • `btnRenEnUso` › OnSelect:
+     Patch(BG_SalidaDetalle; ThisItem; {Estatus: {Value: "EN USO"}});;
+     ClearCollect(colDetSal; Filter(BG_SalidaDetalle; NoSalida = varSalVista.NoSalida))
+
+   • `btnRenConsumido` › OnSelect:
+     Patch(BG_SalidaDetalle; ThisItem; {Estatus: {Value: "CONSUMIDO"}; Abierta: false});;
+     ClearCollect(colDetSal; Filter(BG_SalidaDetalle; NoSalida = varSalVista.NoSalida))
+
+   • `btnRenBaja` › OnSelect:
+     With(
+         {cantBaja: ThisItem.CantDanada + ThisItem.CantExtraviada};
+         Patch(
+             BG_Bajas;
+             Defaults(BG_Bajas);
+             {
+                 Title: ThisItem.Codigo;
+                 Clave: ThisItem.Clave;
+                 Descripcion: ThisItem.Descripcion;
+                 Bodega: ThisItem.Bodega;
+                 Cantidad: cantBaja;
+                 FechaBaja: Now();
+                 NoSalida: ThisItem.NoSalida;
+                 CodigoArea: ThisItem.CodigoArea;
+                 Motivo: Coalesce(ThisItem.ComentarioLinea; "Dañado/Extraviado en seguimiento");
+                 Reporto: varSalVista.Encargado;
+                 RegistroPor: nfPersonaUser
+             }
+         )
+     );;
+     Notify("Baja registrada en historial"; NotificationType.Success)
+
+3) En Vista Devoluciones (`cntVDevolucion`):
+   • `btnSelSalida_1` (en `galSalDev`) › OnSelect:
+     Reemplaza tu fórmula actual para que arme la colección interactiva `colDev`:
+     Set(varSalVista; ThisItem);;
+     ClearCollect(
+         colDev;
+         ForAll(
+             Filter(BG_SalidaDetalle; NoSalida = ThisItem.NoSalida && Abierta = true) As d;
+             With(
+                 {pend: d.CantEntregada - d.CantBuena - d.CantDanada - d.CantExtraviada};
+                 {
+                     IDDetalle: d.ID;
+                     Clave: d.Clave;
+                     Codigo: d.Codigo;
+                     Descripcion: d.Descripcion;
+                     Tipo: d.Tipos.Value;
+                     Bodega: d.Bodega.Value;
+                     Unidad: d.Unidad;
+                     Estatus: d.Estatus.Value;
+                     Entregada: d.CantEntregada;
+                     Pendiente: pend;
+                     Buenas: If(d.Tipos.Value = "RETORNABLE"; pend; 0);
+                     Danadas: 0;
+                     Perdidas: 0;
+                     DarBaja: false;
+                     Comentario: d.ComentarioLinea;
+                     Marcado: true
+                 }
+             )
+         )
+     )
+
+   • `icoCheckDev` › Icon: Pon `Icon.Check`
+   • `btnMarcarLinea` › OnSelect:
+     UpdateIf(colDev; IDDetalle = ThisItem.IDDetalle; {Marcado: !ThisItem.Marcado})
+   • `btnMarcarTodo` › OnSelect:
+     UpdateIf(colDev; true; {Marcado: true})
+   • `btnDesmarcarTodo` › OnSelect:
+     UpdateIf(colDev; true; {Marcado: false})
+   • `lblContadorDev` › Text:
+     CountRows(Filter(colDev; Marcado)) & " de " & CountRows(colDev) & " seleccionados"
+   • `txtBuenas` › OnChange:
+     UpdateIf(colDev; IDDetalle = ThisItem.IDDetalle; {Buenas: Max(0; Value(Self.Text))})
+   • `txtDanadas` › Default: `ThisItem.Danadas`
+   • `txtDanadas` › OnChange:
+     UpdateIf(colDev; IDDetalle = ThisItem.IDDetalle; {Danadas: Max(0; Value(Self.Text))})
+   • `txtPerdidas` › Default: `ThisItem.Perdidas`
+   • `txtPerdidas` › OnChange:
+     UpdateIf(colDev; IDDetalle = ThisItem.IDDetalle; {Perdidas: Max(0; Value(Self.Text))})
+   • `lblDevSuma` › Text:
+     With(
+         {s: ThisItem.Buenas + ThisItem.Danadas + ThisItem.Perdidas};
+         "Suma: " & s & " de " & ThisItem.Pendiente & If(s > ThisItem.Pendiente; " · EXCEDE PENDIENTE"; "")
+     )
+   • `chkDarBaja` › OnCheck:
+     UpdateIf(colDev; IDDetalle = ThisItem.IDDetalle; {DarBaja: true})
+   • `chkDarBaja` › OnUncheck:
+     UpdateIf(colDev; IDDetalle = ThisItem.IDDetalle; {DarBaja: false})
+   • `txtComentDev` › OnChange:
+     UpdateIf(colDev; IDDetalle = ThisItem.IDDetalle; {Comentario: Self.Text})
+
+   • `btnGuardarDev` › OnSelect:
+     ForAll(
+         Filter(colDev; Marcado = true) As d;
+         With(
+             {
+                 regOrig: LookUp(BG_SalidaDetalle; ID = d.IDDetalle);
+                 sumaRec: d.Buenas + d.Danadas + d.Perdidas
+             };
+             Patch(
+                 BG_SalidaDetalle;
+                 regOrig;
+                 {
+                     CantBuena: regOrig.CantBuena + d.Buenas;
+                     CantDanada: regOrig.CantDanada + d.Danadas;
+                     CantExtraviada: regOrig.CantExtraviada + d.Perdidas;
+                     ComentarioLinea: d.Comentario;
+                     Abierta: If(d.Tipo = "UN SOLO USO"; false; (d.Pendiente - sumaRec) > 0);
+                     Estatus: {
+                         Value: If(
+                             d.Tipo = "UN SOLO USO";
+                             "CONSUMIDO";
+                             If((d.Pendiente - sumaRec) <= 0; "DEVUELTO"; "DEVUELTO PARCIAL")
+                         )
+                     }
+                 }
+             );;
+             If(
+                 d.Tipo = "RETORNABLE" && d.Buenas > 0;
+                 With(
+                     {cat: LookUp(BG_Catalogo; Clave = d.Clave)};
+                     Patch(BG_Catalogo; cat; {Existencia: cat.Existencia + d.Buenas})
+                 )
+             );;
+             If(
+                 d.DarBaja && (d.Danadas + d.Perdidas) > 0;
+                 Patch(
+                     BG_Bajas;
+                     Defaults(BG_Bajas);
+                     {
+                         Title: d.Codigo;
+                         Clave: d.Clave;
+                         Descripcion: d.Descripcion;
+                         Bodega: {Value: d.Bodega};
+                         Cantidad: d.Danadas + d.Perdidas;
+                         FechaBaja: Now();
+                         NoSalida: varSalVista.NoSalida;
+                         CodigoArea: varAreaDev.Title;
+                         Motivo: Coalesce(d.Comentario; "Baja en devolución");
+                         Reporto: varSalVista.Encargado;
+                         RegistroPor: nfPersonaUser
+                     }
+                 )
+             )
+         )
+     );;
+     If(
+         CountRows(Filter(BG_SalidaDetalle; NoSalida = varSalVista.NoSalida && Abierta = true)) = 0;
+         Patch(BG_Salidas; LookUp(BG_Salidas; NoSalida = varSalVista.NoSalida); {EstadoSalida: {Value: "CERRADA"}})
+     );;
+     Notify("Devolución registrada correctamente"; NotificationType.Success);;
+     Set(varPantalla; "SEG");;
+     Select(btnRouter)
+
+4) En Vista Catálogo (`cntVCatalogo`) y Bajas (`cntVBajas`):
+   • `btnChipCatBod` (dentro de `galCatBodega`) › OnSelect:
+     Tienes `Select(Parent)`. Cámbialo a: `Set(varBodCat; ThisItem.Value)`
+   • `btnReactivar` (dentro de `galBajas`) › OnSelect:
+     With(
+         {cat: LookUp(BG_Catalogo; Clave = ThisItem.Clave)};
+         If(
+             !IsBlank(cat);
+             Patch(BG_Catalogo; cat; {Existencia: cat.Existencia + ThisItem.Cantidad; EstadoArticulo: {Value: "ACTIVO"}})
+         )
+     );;
+     Remove(BG_Bajas; ThisItem);;
+     ClearCollect(colBajas; Sort(BG_Bajas; FechaBaja; SortOrder.Descending));;
+     Notify("Artículo reactivado y sumado al stock"; NotificationType.Success)
+
+--------------------------------------------------------------------------------
+4. INGRESO DE PRODUCTOS: DESDE BODEGA GENERAL + OPCIÓN MANUAL NUEVA
+--------------------------------------------------------------------------------
+¿Cómo funciona actualmente tu vista `cntVIngresos`?
+Actualmente viene específicamente de la lista de salidas de Bodega General 
+(filtrada a través de `nfPorIngresar`, que carga en la colección `colPorIngresar`).
+Sin embargo, los botones `btnIngresar` y `btnIngresarTodo` NO tienen código en 
+su propiedad `OnSelect` en tu YAML.
+
+PASO A: Activar la lógica de `btnIngresar` (individual) y `btnIngresarTodo`:
+
+1. En `btnIngresar` (dentro de `cntIngSelectores` en `galIngresos`) › OnSelect:
+   With(
+       {
+           claveArt: ThisItem.Codigo & "-" & ThisItem.BodegaDestino;
+           existente: LookUp(BG_Catalogo; Codigo = ThisItem.Codigo && Bodega.Value = ThisItem.BodegaDestino)
+       };
+       If(
+           IsBlank(existente);
+           Patch(
+               BG_Catalogo;
+               Defaults(BG_Catalogo);
+               {
+                   Title: ThisItem.Codigo;
+                   Clave: claveArt;
+                   Codigo: ThisItem.Codigo;
+                   Descripcion: ThisItem.Descripcion;
+                   Tipos: {Value: ThisItem.Tipo};
+                   Categoria: {Value: Coalesce(ThisItem.Categoria; "INSUMO")};
+                   Bodega: {Value: ThisItem.BodegaDestino};
+                   Unidad: ThisItem.Unidad;
+                   Existencia: ThisItem.Cantidad;
+                   Minimo: 5;
+                   EstadoArticulo: {Value: "ACTIVO"}
+               }
+           );
+           Patch(
+               BG_Catalogo;
+               existente;
+               {Existencia: existente.Existencia + ThisItem.Cantidad}
+           )
+       )
+   );;
+   RemoveIf(colPorIngresar; IdGeneral = ThisItem.IdGeneral);;
+   Notify("Ingreso aplicado a " & ThisItem.BodegaDestino; NotificationType.Success)
+
+2. En `btnIngresarTodo` (dentro de `cntIngEncabezado`) › OnSelect:
+   ForAll(
+       colPorIngresar As i;
+       With(
+           {
+               claveArt: i.Codigo & "-" & i.BodegaDestino;
+               existente: LookUp(BG_Catalogo; Codigo = i.Codigo && Bodega.Value = i.BodegaDestino)
+           };
+           If(
+               IsBlank(existente);
+               Patch(
+                   BG_Catalogo;
+                   Defaults(BG_Catalogo);
+                   {
+                       Title: i.Codigo;
+                       Clave: claveArt;
+                       Codigo: i.Codigo;
+                       Descripcion: i.Descripcion;
+                       Tipos: {Value: i.Tipo};
+                       Categoria: {Value: Coalesce(i.Categoria; "INSUMO")};
+                       Bodega: {Value: i.BodegaDestino};
+                       Unidad: i.Unidad;
+                       Existencia: i.Cantidad;
+                       Minimo: 5;
+                       EstadoArticulo: {Value: "ACTIVO"}
+                   }
+               );
+               Patch(
+                   BG_Catalogo;
+                   existente;
+                   {Existencia: existente.Existencia + i.Cantidad}
+               )
+           )
+       )
+   );;
+   Clear(colPorIngresar);;
+   Notify("Todos los ingresos fueron aplicados al catálogo"; NotificationType.Success)
+
+PASO B: Cómo agregar un Ingreso Manual (Productos que NO vienen de Bodega General):
+Para que puedas registrar ingresos o dar de alta productos manualmente sin 
+depender de Bodega General, sigue estos pasos sencillos reutilizando tu misma 
+vista `cntVIngresos`:
+
+1. En `cntIngEncabezado` (donde está `btnIngresarTodo`), inserta un Botón llamado `btnAbrirNuevoIng`:
+   • Text:            "+ Ingreso manual"
+   • Width:           160
+   • Height:          36
+   • Fill:            ColorValue(nfCol.Accent)
+   • Color:           Color.White
+   • OnSelect:        Set(varMostrarFormIng; !varMostrarFormIng)
+
+2. Dentro de `cntVIngresos` (justo debajo de `cntIngEncabezado` y arriba de `galIngresos`), 
+   inserta un Contenedor Automático Horizontal llamado `cntFormIngresoManual`:
+   • Visible:         varMostrarFormIng
+   • Height:          64
+   • FillPortions:    0
+   • Fill:            ColorValue(nfCol.Surface)
+   • BorderThickness: 1
+   • BorderColor:     ColorValue(nfCol.Accent)
+   • LayoutDirection: LayoutDirection.Horizontal
+   • LayoutGap:       8
+   • PaddingLeft/Right/Top/Bottom: 8
+
+3. Adentro de `cntFormIngresoManual`, inserta estos 5 controles:
+   a) `txtManCod` (TextInput):
+      • Placeholder / HintText: "Código (ej. HER-099)"
+      • Width: 130   | Height: 38
+      • Default: ""
+   b) `txtManDesc` (TextInput):
+      • Placeholder / HintText: "Descripción del artículo"
+      • Width: 220   | Height: 38
+      • Default: If(!IsBlank(LookUp(BG_Catalogo; Codigo = txtManCod.Text)); LookUp(BG_Catalogo; Codigo = txtManCod.Text; Descripcion); "")
+   c) `txtManCant` (TextInput):
+      • Placeholder / HintText: "Cantidad"
+      • Format: TextFormat.Number
+      • Width: 90    | Height: 38
+      • Default: "1"
+   d) `txtManUnd` (TextInput):
+      • Placeholder / HintText: "Unidad (PZA, LT, KG)"
+      • Width: 90    | Height: 38
+      • Default: Coalesce(LookUp(BG_Catalogo; Codigo = txtManCod.Text; Unidad); "PZA")
+   e) `btnAgregarManualACola` (Button):
+      • Text: "Pasar a lista"
+      • Width: 120   | Height: 38
+      • Fill: ColorValue(nfCol.Blue)
+      • Color: Color.White
+      • DisplayMode: If(Or(IsBlank(txtManCod.Text); IsBlank(txtManDesc.Text); Value(txtManCant.Text) <= 0); DisplayMode.Disabled; DisplayMode.Edit)
+      • OnSelect:
+        Collect(
+            colPorIngresar;
+            {
+                IdGeneral:      RoundDown(Rand() * 90000; 0) + 10000;
+                Codigo:        Upper(Trim(txtManCod.Text));
+                Descripcion:   Trim(txtManDesc.Text);
+                Cantidad:      Value(txtManCant.Text);
+                Unidad:        Upper(Trim(txtManUnd.Text));
+                AreaUso:       "INGRESO MANUAL";
+                Responsable:   nfUser.Nombre;
+                Tipo:          Coalesce(LookUp(BG_Catalogo; Codigo = Upper(Trim(txtManCod.Text)); Tipos.Value); "RETORNABLE");
+                BodegaDestino: Coalesce(LookUp(BG_Catalogo; Codigo = Upper(Trim(txtManCod.Text)); Bodega.Value); "BODEGA 1");
+                Categoria:     Coalesce(LookUp(BG_Catalogo; Codigo = Upper(Trim(txtManCod.Text)); Categoria.Value); "HERRAMIENTA");
+                EsNuevo:       IsBlank(LookUp(BG_Catalogo; Codigo = Upper(Trim(txtManCod.Text)); Codigo))
+            }
+        );;
+        Reset(txtManCod);;
+        Reset(txtManDesc);;
+        Reset(txtManCant);;
+        Reset(txtManUnd);;
+        Set(varMostrarFormIng; false)
+
+   ¡Listo! Al darle clic a "Pasar a lista", el artículo aparecerá en `galIngresos` 
+   exactamente igual que los de Bodega General, permitiéndote elegir con un clic si 
+   es `RETORNABLE` / `UN SOLO USO`, a qué bodega va (`BODEGA 1` / `BODEGA 2`) y 
+   confirmarlo con el botón `btnIngresar`.
+
+--------------------------------------------------------------------------------
+5. MEJORA OPCIONAL (PARA IMPLEMENTAR DESPUÉS): 
+   REEMPLAZAR ETIQUETA DE CANTIDAD POR UN TEXTINPUT ENTRE LOS BOTONES (−) Y (+)
+--------------------------------------------------------------------------------
+Si deseas que el usuario pueda tanto usar los botones `btnMenos` (−) y `btnMas` (+) 
+como escribir el número directamente con el teclado en las tarjetas de artículos 
+(`cntCantidad`) y en el popup del carrito (`cntPopCant`), sigue estos pasos:
+
+A) EN LA GALERÍA DE ARTÍCULOS (`galItems` › `cntCantidad`):
+   1. Elimina o pon `Visible = false` a la etiqueta actual `lblCant1`.
+   2. Inserta dentro de `cntCantidad` un control **TextInput clásico** (o Moderno) 
+      llamado `txtCantItem`.
+   3. Configura sus propiedades de posición y diseño:
+      • X:               28
+      • Y:               0
+      • Width:           66   (Y mueve `btnMas` a `X = 94` para que aproveche los 122px de `cntCantidad`)
+      • Height:          28
+      • Align:           Align.Center
+      • Format:          TextFormat.Number
+      • Size:            12
+      • FontWeight:      FontWeight.Semibold
+      • BorderStyle:     BorderStyle.None
+      • Fill:            RGBA(0; 0; 0; 0)
+   4. Configura sus propiedades de datos y lógica:
+      • Default:         LookUp(colSel; Clave = ThisItem.Clave; Cantidad)
+      • DelayOutput:     true
+      • OnChange:
+        With(
+            {val: Value(Self.Text)};
+            If(
+                val <= 0;
+                UpdateIf(colSel; Clave = ThisItem.Clave; {Cantidad: 1});;
+                Reset(Self);
+                UpdateIf(
+                    colSel;
+                    Clave = ThisItem.Clave;
+                    {Cantidad: Min(ThisItem.Existencia; val)}
+                );;
+                If(
+                    val > ThisItem.Existencia;
+                    Notify("Stock máximo disponible: " & ThisItem.Existencia & " " & ThisItem.Unidad; NotificationType.Warning; 2000);;
+                    Reset(Self)
+                )
+            )
+        )
+
+B) EN EL POPUP DEL CARRITO (`galPopLineas` › `cntPopLinea` › `cntPopCant`):
+   1. Elimina o pon `Visible = false` a la etiqueta actual `lblPopCant`.
+   2. Inserta dentro de `cntPopCant` un control **TextInput clásico** llamado `txtPopCant`.
+   3. Configura sus propiedades de posición y diseño:
+      • X:               28
+      • Y:               0
+      • Width:           46   (`btnPopMenos` queda en X=0, Width=28 y `btnPopMas 1` en X=74, Width=28)
+      • Height:          28
+      • Align:           Align.Center
+      • Format:          TextFormat.Number
+      • Size:            12
+      • FontWeight:      FontWeight.Semibold
+      • BorderStyle:     BorderStyle.None
+      • Fill:            RGBA(0; 0; 0; 0)
+   4. Configura sus propiedades de datos y lógica:
+      • Default:         ThisItem.Cantidad
+      • DelayOutput:     true
+      • OnChange:
+        With(
+            {val: Value(Self.Text)};
+            If(
+                val <= 0;
+                UpdateIf(colSel; Clave = ThisItem.Clave; {Cantidad: 1});;
+                Reset(Self);
+                UpdateIf(
+                    colSel;
+                    Clave = ThisItem.Clave;
+                    {Cantidad: Min(ThisItem.Existencia; val)}
+                );;
+                If(
+                    val > ThisItem.Existencia;
+                    Notify("Solo hay " & ThisItem.Existencia & " " & ThisItem.Unidad & " disponibles"; NotificationType.Warning; 2000);;
+                    Reset(Self)
+                )
+            )
+        )
+   5. Nota: Al estar `Default` enlazado a `colSel`, cuando presiones los botones `+` 
+      o `−`, el número dentro del `TextInput` se actualizará automáticamente, y 
+      cuando escribas un número a mano se validará contra `ThisItem.Existencia` 
+      sin permitir excesos de stock ni cantidades en cero.
